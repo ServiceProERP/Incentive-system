@@ -34,6 +34,7 @@ export default function MonthsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [rate, setRate] = useState(2.0);
+  const [rateLoaded, setRateLoaded] = useState(false);
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [computing, setComputing] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -43,6 +44,18 @@ export default function MonthsPage() {
     fetch(`/api/months?month=${month}&year=${year}`)
       .then((r) => r.json())
       .then(setSummaries);
+
+  // Load the company default ₹ rate from Settings once, so managers don't
+  // have to remember it each month. They can still edit it per computation.
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.ratePerPoint) setRate(s.ratePerPoint);
+        setRateLoaded(true);
+      })
+      .catch(() => setRateLoaded(true));
+  }, []);
 
   useEffect(() => { load(); }, [month, year]);
 
@@ -84,7 +97,7 @@ export default function MonthsPage() {
           <select className="form-select w-24" value={year} onChange={(e) => setYear(Number(e.target.value))}>
             {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" title="Default comes from Settings — editable here per computation">
             <span className="text-sm text-gray-600">₹</span>
             <input
               type="number"
@@ -92,6 +105,7 @@ export default function MonthsPage() {
               className="form-input w-20"
               title="Rate per point"
               value={rate}
+              disabled={!rateLoaded}
               onChange={(e) => setRate(Number(e.target.value))}
             />
             <span className="text-xs text-gray-400">/pt</span>
