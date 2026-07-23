@@ -1,0 +1,147 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum JobCategory {
+  A
+  B
+  C
+}
+
+enum DeadlinePerformance {
+  MET
+  EARLY_30
+  EARLY_50
+  EARLY_70
+  MISSED
+}
+
+enum PartsUsed {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FixAttempt {
+  FIRST_TIME
+  REWORK_1
+  REWORK_2
+}
+
+enum AcceptanceSpeed {
+  FAST     // < 30 min
+  MEDIUM   // 30 min – 2 hrs
+  SLOW     // > 2 hrs
+}
+
+enum MultiplierTier {
+  NO_INCENTIVE
+  STANDARD
+  HIGH_PERFORMER
+  STAR_PERFORMER
+}
+
+model Technician {
+  id          String   @id @default(cuid())
+  name        String
+  employeeId  String   @unique
+  email       String?
+  phone       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs        Job[]
+  monthSummaries MonthSummary[]
+}
+
+model Job {
+  id              String   @id @default(cuid())
+  jobNumber       String   @unique
+  technicianId    String
+  technician      Technician @relation(fields: [technicianId], references: [id])
+
+  category        JobCategory
+  description     String?
+  assignedAt      DateTime
+  deadlineAt      DateTime
+  completedAt     DateTime?
+
+  // Scoring inputs
+  deadlinePerformance DeadlinePerformance?
+  partsUsed           PartsUsed?
+  fixAttempt          FixAttempt?
+  acceptanceSpeed     AcceptanceSpeed?
+  partsOrdered        Int?               // count
+  partsActuallyUsed   Int?               // count
+  isReopened          Boolean @default(false)
+  reopenedAt          DateTime?
+
+  // Computed scores (stored for audit)
+  deadlinePoints      Int  @default(0)
+  deadlineBonusPoints Int  @default(0)
+  partsPoints         Int  @default(0)
+  fixPoints           Int  @default(0)
+  acceptancePoints    Int  @default(0)
+  volumeBonusPoints   Int  @default(0)
+  noWastePoints       Int  @default(0)
+  reopenPenalty       Int  @default(0)
+  totalJobPoints      Int  @default(0)
+
+  // Manager override
+  managerOverride     Boolean @default(false)
+  overridePoints      Int?
+  overrideReason      String?
+
+  month   Int   // 1-12
+  year    Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([technicianId])
+  @@index([month, year])
+}
+
+model MonthSummary {
+  id              String   @id @default(cuid())
+  technicianId    String
+  technician      Technician @relation(fields: [technicianId], references: [id])
+
+  month           Int
+  year            Int
+
+  totalJobsDone   Int      @default(0)
+  grossPoints     Int      @default(0)
+  totalDeductions Int      @default(0)
+  netPoints       Int      @default(0)
+  multiplierTier  MultiplierTier
+  multiplier      Float
+  ratePerPoint    Float    @default(2.0)
+  incentiveAmount Float    @default(0)
+
+  isApproved      Boolean  @default(false)
+  approvedAt      DateTime?
+  approvedBy      String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([technicianId, month, year])
+  @@index([month, year])
+}
+
+model AppSettings {
+  id            String  @id @default("singleton")
+  ratePerPoint  Float   @default(2.0)
+  updatedAt     DateTime @updatedAt
+}
